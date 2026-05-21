@@ -6,65 +6,63 @@
 #define BTN_RANDOM 10
 
 CRGB leds[1];
-CRGBPalette16 currentPalette = PartyColors_p;
 
-// Налаштування плавності
-float currentHue = 0;
-float currentVal = 20;
-float targetVal = 20;
+// Параметри для "заходу"
+float currentHue = 0;       // Поточний колір на колі
+float targetHue = 0;        // Куди ми рухаємось
+float currentVal = 20;      // Поточна яскравість
+float targetVal = 20;       // Цільова яскравість
+float hueSpeed = 0.002;     // Темп зміни кольору (дуже повільний)
 
-// Логіка кнопок
-unsigned long btnPressTime = 0;
-bool isLongPress = false;
+int brightnessLevels[] = {20, 100, 255}; 
+int bMode = 0;
 
-// Генеративні змінні
-uint8_t paletteType = 0; // 0-3 типи гармоній
-
-void nextPalette() {
-    paletteType = (paletteType + 1) % 4;
-    switch(paletteType) {
-        case 0: currentPalette = OceanColors_p; break;
-        case 1: currentPalette = ForestColors_p; break;
-        case 2: currentPalette = PartyColors_p; break;
-        case 3: currentPalette = HeatColors_p; break;
-    }
+void logStatus(String msg) {
+  Serial.print("[INFO] " + msg);
+  Serial.print(" | H: "); Serial.print(currentHue);
+  Serial.print(" | V: "); Serial.println(currentVal);
 }
 
 void setup() {
+  Serial.begin(115200);
   FastLED.addLeds<NEOPIXEL, RGB_LED_PIN>(leds, 1);
   pinMode(BTN_BRIGHTNESS, INPUT_PULLUP);
   pinMode(BTN_RANDOM, INPUT_PULLUP);
-  randomSeed(analogRead(0));
 }
 
 void loop() {
-  // --- Обробка кнопок з логікою часу ---
-  // Кнопка 1: Короткий клік - перемикач яскравості, Довгий - темп анімації
-  if (digitalRead(BTN_BRIGHTNESS) == LOW) {
-    if (!btnPressTime) btnPressTime = millis();
-  } else if (btnPressTime > 0) {
-    if (millis() - btnPressTime > 1000) { /* Long Press Action */ } 
-    else { targetVal = (targetVal >= 255) ? 20 : targetVal + 50; }
-    btnPressTime = 0;
+  bool b1 = (digitalRead(BTN_BRIGHTNESS) == LOW);
+  bool b2 = (digitalRead(BTN_RANDOM) == LOW);
+
+  // 1. Обробка кнопок
+  if (b1 && b2) {
+    hueSpeed = 0.05; // "Швидкий" режим при комбо
+    logStatus("COMBO: Speed Up");
+    delay(300);
+  } else if (b1) {
+    bMode = (bMode + 1) % 3;
+    targetVal = brightnessLevels[bMode];
+    logStatus("Brightness Changed");
+    delay(300);
+  } else if (b2) {
+    targetHue = random(0, 255); // Стрибок в іншу частину палітри
+    logStatus("New Hue Target Set");
+    delay(300);
   }
 
-  // Кнопка 2: Короткий клік - зміна палітри, Довгий - "Генеративний хаос"
-  if (digitalRead(BTN_RANDOM) == LOW) {
-     nextPalette();
-     delay(300);
-  }
+  // 2. Інерційна математика (Natural Motion)
+  // Плавне наближення яскравості
+  currentVal += (targetVal - currentVal) * 0.01; 
+  
+  // Плавне наближення кольору
+  // Якщо різниця велика, рухаємось трохи швидше
+  float hueDiff = targetHue - currentHue;
+  currentHue += hueDiff * hueSpeed; 
 
-  // --- Генеративна математика ---
-  // Плавне перетікання яскравості (LERP)
-  currentVal += (targetVal - currentVal) * 0.05; 
-  
-  // Плавний зсув кольору за теорією палітри
-  static float colorShift = 0;
-  colorShift += 0.2 + (sin8(millis()/100) / 255.0); // Ритмічне прискорення
-  
-  // Рендер кольору
-  leds[0] = ColorFromPalette(currentPalette, (uint8_t)colorShift, (uint8_t)currentVal, LINEARBLEND);
-  
+  // 3. Рендер
+  // Насиченість 200 (пастельна, але жива)
+  leds[0] = CHSV((uint8_t)currentHue, 200, (uint8_t)currentVal);
   FastLED.show();
+  
   delay(15);
 }
