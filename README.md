@@ -14,6 +14,13 @@ Lumina-Flow is an interactive, generative light control system. Instead of stati
 - ESP32-C6-DevKitC-1
 - 2x Tactile Buttons (connected to GPIO 9 and 10 with internal PULLUP).
 
+## Wiring Scheme
+- **Button 1 (Brightness)**: GPIO 9 <---> GND
+- **Button 2 (Randomize)**: GPIO 10 <---> GND
+- **LED**: Integrated RGB (GPIO 8)
+
+*Note: Internal PULLUP resistors are used, so no external resistors are required.*
+
 ## Usage
 - **Button 1**: Cycle brightness (20 -> 100 -> 255).
 - **Button 2**: Randomize hue target.
