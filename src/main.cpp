@@ -1,42 +1,68 @@
 #include <Arduino.h>
+#include <FastLED.h>
 
 #define RGB_LED_PIN 8
+#define BTN_BRIGHTNESS 9
+#define BTN_RANDOM 10
 
-float hue = 0.0;
+CRGB leds[1];
 
-// Власна функція конвертації HSV в RGB
-void hsvToRgb(float h, float s, float v, uint8_t *r, uint8_t *g, uint8_t *b) {
-    float c = v * s;
-    float x = c * (1 - fabs(fmod(h / 60.0, 2) - 1));
-    float m = v - c;
-    float r1, g1, b1;
+// Параметри для "заходу"
+float currentHue = 0;       // Поточний колір на колі
+float targetHue = 0;        // Куди ми рухаємось
+float currentVal = 20;      // Поточна яскравість
+float targetVal = 20;       // Цільова яскравість
+float hueSpeed = 0.002;     // Темп зміни кольору (дуже повільний)
 
-    if (h < 60) { r1 = c; g1 = x; b1 = 0; }
-    else if (h < 120) { r1 = x; g1 = c; b1 = 0; }
-    else if (h < 180) { r1 = 0; g1 = c; b1 = x; }
-    else if (h < 240) { r1 = 0; g1 = x; b1 = c; }
-    else if (h < 300) { r1 = x; g1 = 0; b1 = c; }
-    else { r1 = c; g1 = 0; b1 = x; }
+int brightnessLevels[] = {20, 100, 255}; 
+int bMode = 0;
 
-    *r = (uint8_t)((r1 + m) * 255);
-    *g = (uint8_t)((g1 + m) * 255);
-    *b = (uint8_t)((b1 + m) * 255);
+void logStatus(String msg) {
+  Serial.print("[INFO] " + msg);
+  Serial.print(" | H: "); Serial.print(currentHue);
+  Serial.print(" | V: "); Serial.println(currentVal);
 }
 
 void setup() {
   Serial.begin(115200);
+  FastLED.addLeds<NEOPIXEL, RGB_LED_PIN>(leds, 1);
+  pinMode(BTN_BRIGHTNESS, INPUT_PULLUP);
+  pinMode(BTN_RANDOM, INPUT_PULLUP);
 }
 
 void loop() {
-  uint8_t r, g, b;
+  bool b1 = (digitalRead(BTN_BRIGHTNESS) == LOW);
+  bool b2 = (digitalRead(BTN_RANDOM) == LOW);
+
+  // 1. Обробка кнопок
+  if (b1 && b2) {
+    hueSpeed = 0.05; // "Швидкий" режим при комбо
+    logStatus("COMBO: Speed Up");
+    delay(300);
+  } else if (b1) {
+    bMode = (bMode + 1) % 3;
+    targetVal = brightnessLevels[bMode];
+    logStatus("Brightness Changed");
+    delay(300);
+  } else if (b2) {
+    targetHue = random(0, 255); // Стрибок в іншу частину палітри
+    logStatus("New Hue Target Set");
+    delay(300);
+  }
+
+  // 2. Інерційна математика (Natural Motion)
+  // Плавне наближення яскравості
+  currentVal += (targetVal - currentVal) * 0.01; 
   
-  // Пастельні налаштування: низька насиченість (0.4)
-  hsvToRgb(hue, 0.43, 0.20, &r, &g, &b);
+  // Плавне наближення кольору
+  // Якщо різниця велика, рухаємось трохи швидше
+  float hueDiff = targetHue - currentHue;
+  currentHue += hueDiff * hueSpeed; 
 
-  rgbLedWrite(RGB_LED_PIN, r, g, b);
-
-  hue += 0.5;
-  if (hue >= 360.0) hue = 0.0;
-
-  delay(20);
+  // 3. Рендер
+  // Насиченість 200 (пастельна, але жива)
+  leds[0] = CHSV((uint8_t)currentHue, 200, (uint8_t)currentVal);
+  FastLED.show();
+  
+  delay(15);
 }
